@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Study Mode
+Comment=Prompt to enable or disable study mode
+Exec=study-mode --prompt
+Icon=dialog-information
+Terminal=false
+Categories=Utility

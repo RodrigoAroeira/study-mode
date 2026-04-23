@@ -3,8 +3,22 @@
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/study-mode.conf"
 declare -A last_notify_times
 
-error_out() {
+service_is_running() {
+  systemctl --user is-active --quiet study-mode.service
+}
+
+notify_user() {
   notify-send "Study Mode" "$@"
+}
+
+show_notification() {
+  local msg="$1"
+  shift
+  notify_user "$msg" --action cancel=Cancel --expire-time 0 "$@"
+}
+
+error_out() {
+  notify_user "$@"
   exit 1
 }
 
@@ -25,14 +39,14 @@ kill_app() {
   local now
   now=$(date +%s)
   if pkill -TERM -fi "$app"; then
-    if (( now - last_time > 10 )); then
-      notify-send "Study Mode" "You can not use \`$app\` right now"
+    if ((now - last_time > 10)); then
+      notify_user "You can not use \`$app\` right now"
       last_notify_times[$app]=$now
     fi
   fi
 }
 
-main() {
+daemon_loop() {
   load_config
 
   while true; do
@@ -50,4 +64,38 @@ main() {
   done
 }
 
-main "$@"
+prompt_loop() {
+  if service_is_running; then
+    res=$(show_notification "Enabled" --action stop=Stop --wait)
+  else
+    res=$(show_notification "Disabled" --action start=Start --wait)
+  fi
+
+  case "$res" in
+  start)
+    systemctl --user start --now study-mode
+    ;;
+  stop)
+    systemctl --user stop --now study-mode
+    ;;
+  *)
+    exit 0
+    ;;
+  esac
+
+  [[ $? -ne 0 ]] && notify_user "Failed to $res study-mode"
+}
+
+case "${1:-}" in
+--daemon | "")
+  daemon_loop
+  ;;
+--prompt)
+  prompt_loop
+  ;;
+*)
+  echo "Usage: study-mode [--daemon|--prompt]"
+  exit 1
+  ;;
+esac
+
